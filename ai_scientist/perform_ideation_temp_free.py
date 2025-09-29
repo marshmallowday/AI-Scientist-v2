@@ -125,6 +125,33 @@ Results from your last action (if any):
 """
 
 
+def remove_ignorable_trailing_text(trailing_text: str) -> str:
+    """Remove ignorable trailing comments and whitespace."""
+
+    if not trailing_text:
+        return ""
+
+    # Remove line comments (// or #) and block comments, then strip whitespace.
+    cleaned = re.sub(r"(?m)^\s*(//|#).*$", "", trailing_text)
+    cleaned = re.sub(r"/\*.*?\*/", "", cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r"<!--.*?-->", "", cleaned, flags=re.DOTALL)
+    return cleaned.strip()
+
+
+def parse_arguments_text(arguments_text: str) -> Dict[str, Any]:
+    """Parse JSON arguments, allowing for trailing whitespace or comments."""
+
+    trimmed_text = arguments_text.strip()
+    decoder = json.JSONDecoder()
+    parsed_obj, end_index = decoder.raw_decode(trimmed_text)
+
+    trailing_text = trimmed_text[end_index:]
+    if remove_ignorable_trailing_text(trailing_text):
+        raise ValueError("Trailing non-comment content found after JSON payload.")
+
+    return parsed_obj
+
+
 def generate_temp_free_idea(
     idea_fname: str,
     client: Any,
@@ -211,7 +238,7 @@ def generate_temp_free_idea(
                         tool = tools_dict[action]
                         # Parse arguments
                         try:
-                            arguments_json = json.loads(arguments_text)
+                            arguments_json = parse_arguments_text(arguments_text)
                         except json.JSONDecodeError:
                             raise ValueError(f"Invalid arguments JSON for {action}.")
 
@@ -225,7 +252,7 @@ def generate_temp_free_idea(
                     elif action == "FinalizeIdea":
                         # Parse arguments
                         try:
-                            arguments_json = json.loads(arguments_text)
+                            arguments_json = parse_arguments_text(arguments_text)
                             idea = arguments_json.get("idea")
                             if not idea:
                                 raise ValueError("Missing 'idea' in arguments.")
